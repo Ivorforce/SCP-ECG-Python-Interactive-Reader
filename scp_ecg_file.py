@@ -553,7 +553,7 @@ class Section10Measurements:
     lead_id: int = None
     length_of_record: int = None
     p_duration_ms: int = None
-    pr_internval_ms: int = None
+    pr_interval_ms: int = None
     qrs_duration_ms: int = None
     qt_interval_ms: int = None
     q_duration_ms: int = None
