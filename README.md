@@ -30,8 +30,6 @@ with pathlib.Path("record.scp").open("rb") as f:
     px.line(file.section6_dataframe())
 
     # Convert the data to the MIT-BIH file format
-    import plotly.express as px
-    import pandas as pd
     file.write_wfdb_file("destination/path/record")
 ```
 
