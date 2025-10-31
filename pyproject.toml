@@ -1,0 +1,20 @@
+[project]
+name = "scp_ecg_file"
+version = "0.1.0"
+description = "An interactive file reader for SCP-ECG files."
+authors = [
+    { name = "Lukas Tenbrink", email = "lukas.tenbrink@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.12"
+packages = [
+    { include = "scp_file", from = "scp-ecg-file" },
+]
+dependencies = [
+    "numpy (>=2.3.4,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
