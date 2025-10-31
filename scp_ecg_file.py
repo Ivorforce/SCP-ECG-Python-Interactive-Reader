@@ -216,7 +216,7 @@ class Section1:
 
         return result
 
-    def read_tags_and_interpret(self) -> dict[str, Any]:
+    def read_tags_and_interpret(self) -> InterpretedSection1:
         tags = self.read_tags()
 
         result = InterpretedSection1()
@@ -232,33 +232,31 @@ class Section1:
 
 @dataclasses.dataclass
 class HuffmanTable:
-    table: dict[int, (bool, int)]
+    table: dict[bytes, tuple[bool, int]]
 
     @staticmethod
     def default() -> "HuffmanTable":
-        return HuffmanTable(
-            {
-                b"0": (True, 0),
-                b"100": (True, 1),
-                b"101": (True, -1),
-                b"1100": (True, 2),
-                b"1101": (True, -2),
-                b"11100": (True, 3),
-                b"11101": (True, -3),
-                b"111100": (True, 4),
-                b"111101": (True, -4),
-                b"1111100": (True, 5),
-                b"1111101": (True, -5),
-                b"11111100": (True, 6),
-                b"11111101": (True, -6),
-                b"111111100": (True, 7),
-                b"111111101": (True, -7),
-                b"1111111100": (True, 8),
-                b"1111111101": (True, -8),
-                b"1111111110": (False, 8),
-                b"1111111111": (False, 16),
-            }
-        )
+        return HuffmanTable({
+            b"0": (True, 0),
+            b"100": (True, 1),
+            b"101": (True, -1),
+            b"1100": (True, 2),
+            b"1101": (True, -2),
+            b"11100": (True, 3),
+            b"11101": (True, -3),
+            b"111100": (True, 4),
+            b"111101": (True, -4),
+            b"1111100": (True, 5),
+            b"1111101": (True, -5),
+            b"11111100": (True, 6),
+            b"11111101": (True, -6),
+            b"111111100": (True, 7),
+            b"111111101": (True, -7),
+            b"1111111100": (True, 8),
+            b"1111111101": (True, -8),
+            b"1111111110": (False, 8),
+            b"1111111111": (False, 16),
+        })
 
     def decode(self, b: bytes) -> list[int]:
         values: list[int] = []
@@ -454,7 +452,7 @@ class DataContainer:
 class Section6:
     io: IOBase
 
-    def read(self, tables: list[HuffmanTable], section3: Section3) -> DataContainer:
+    def read(self, tables: list[HuffmanTable], section3: InterpretedSection3) -> DataContainer:
         self.io.seek(0)
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
@@ -550,7 +548,7 @@ class Section7:
             average_pp_interval_ms=real_measurement(average_pp_interval_ms),
         )
 
-
+@dataclasses.dataclass
 class Section10Measurements:
     lead_id: int = None
     length_of_record: int = None
@@ -595,7 +593,7 @@ class Section10:
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
 
-        result: int[dict, Section10Measurements] = dict()
+        result: dict[int, Section10Measurements] = dict()
         while header.length_bytes > r.buffer.tell():
             id = r.read("H")
             length_bytes = r.read("H")
@@ -610,7 +608,7 @@ class Section10:
             except:
                 pass  # No more bytes, just stop
             result[id] = Section10Measurements(
-                *measurements[: len(dataclasses.fields(Section10Measurements))]
+                *measurements[:len(dataclasses.fields(Section10Measurements))]
             )
 
         return result
