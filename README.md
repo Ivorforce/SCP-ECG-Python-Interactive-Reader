@@ -49,7 +49,7 @@ The support in this implementation is need-directed, and thus a lot of features 
 ## Command line interface
 
 The script also supports a basic command line interface (although the primary interface is the python interface).
-There is currently just one supported action.
+There is currently just a few supported actions.
 
 ### print-section-headers
 
@@ -57,19 +57,33 @@ There is currently just one supported action.
 python python scp_ecg_file.py print-section-headers --input path/to/record.scp
 ```
 
-Prints something like:
-
 ```
 Section 00: 136 bytes (section version: 0, protocol version: 0)
 Section 01: 164 bytes (section version: 0, protocol version: 0)
-Section 02: 16 bytes (section version: 0, protocol version: 0)
-Section 03: 126 bytes (section version: 0, protocol version: 0)
-Section 04: 330 bytes (section version: 0, protocol version: 0)
-Section 05: 14446 bytes (section version: 0, protocol version: 0)
-Section 06: 120046 bytes (section version: 0, protocol version: 0)
-Section 07: 64 bytes (section version: 0, protocol version: 0)
-Section 08: 25 bytes (section version: 0, protocol version: 0)
-Section 09: 16 bytes (section version: 0, protocol version: 0)
-Section 10: 16 bytes (section version: 0, protocol version: 0)
-Section 11: 16 bytes (section version: 0, protocol version: 0)
+...
 ```
+
+### print-tags
+
+```shell
+python python scp_ecg_file.py print-tags --input path/to/record.scp
+```
+
+```
+{'first_name': 'Max',
+ 'last_name': 'Mustermann',
+ ...
+}
+ ```
+
+Note that the output is json-like, but not actual json (it's a python dictionary).
+
+### convert-to-mit
+
+Converts the compatible parts of the file to the MIT-BIH file format, which can be read by [wfdb](https://wfdb.io).
+
+```shell
+python python scp_ecg_file.py convert-to-mit --input path/to/record.scp --output path/to/record
+```
+
+This will create `record.dat` and `record.hea` in `path/to`.

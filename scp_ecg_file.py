@@ -302,7 +302,6 @@ class Section2:
         if number_of_tables == 19999:
             return [HuffmanTable.default()]
 
-        print(number_of_tables)
         raise ValueError("Custom huffman tables are not supported yet")
 
 
@@ -695,7 +694,6 @@ class SCPFile:
         tables = self.section2().read_tables()
         section3 = self.section3().read_and_interpret()
         container = self.section6().read(tables, section3)
-        print((1000 * 1000) / container.sample_time_interval_us)
 
         wfdb.wrsamp(
             record_name=path.stem,
@@ -709,10 +707,13 @@ class SCPFile:
 
 class Action(Enum):
     print_section_headers = 'print-section-headers'
+    print_tags = 'print-tags'
+    convert_to_mit = 'convert-to-mit'
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument("action", type=Action, choices=list(Action))
 arg_parser.add_argument("--input", type=pathlib.Path)
+arg_parser.add_argument("--output", type=pathlib.Path, required=False)
 
 def main():
     args = arg_parser.parse_args()
@@ -723,6 +724,17 @@ def main():
             headers = file.read_all_section_headers()
             for header in headers:
                 print(f"Section {header.id:02d}: {header.length_bytes} bytes (section version: {header.section_version}, protocol version: {header.protocol_version})")
+    if args.action == Action.print_tags:
+        import pprint
+        with args.input.open("rb") as f:
+            file = SCPFile.read(f)
+            tags = file.section1().read_tags_and_interpret()
+            pprint.pp(dataclasses.asdict(tags))
+    if args.action == Action.convert_to_mit:
+        with args.input.open("rb") as f:
+            file = SCPFile.read(f)
+            file.write_wfdb_file(args.output)
+        print(args.output)
     else:
         raise NotImplementedError()
 
