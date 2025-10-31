@@ -45,3 +45,31 @@ The support in this implementation is need-directed, and thus a lot of features 
 - Section 6: Contains ECG data.
 - Section 7: Contains ECG per beat metadata.
 - Section 10: Contains global ECG metadata.
+
+## Command line interface
+
+The script also supports a basic command line interface (although the primary interface is the python interface).
+There is currently just one supported action.
+
+### print-section-headers
+
+```shell
+python python scp_ecg_file.py print-section-headers --input path/to/record.scp
+```
+
+Prints something like:
+
+```
+Section 00: 136 bytes (section version: 0, protocol version: 0)
+Section 01: 164 bytes (section version: 0, protocol version: 0)
+Section 02: 16 bytes (section version: 0, protocol version: 0)
+Section 03: 126 bytes (section version: 0, protocol version: 0)
+Section 04: 330 bytes (section version: 0, protocol version: 0)
+Section 05: 14446 bytes (section version: 0, protocol version: 0)
+Section 06: 120046 bytes (section version: 0, protocol version: 0)
+Section 07: 64 bytes (section version: 0, protocol version: 0)
+Section 08: 25 bytes (section version: 0, protocol version: 0)
+Section 09: 16 bytes (section version: 0, protocol version: 0)
+Section 10: 16 bytes (section version: 0, protocol version: 0)
+Section 11: 16 bytes (section version: 0, protocol version: 0)
+```

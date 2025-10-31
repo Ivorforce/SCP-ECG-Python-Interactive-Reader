@@ -10,6 +10,7 @@ import pathlib
 import struct
 from io import BytesIO, IOBase
 import numpy as np
+import argparse
 
 @dataclasses.dataclass
 class InteractiveReader:
@@ -705,3 +706,25 @@ class SCPFile:
             p_signal=np.array(container.data_mv).T.astype(np.float64),
             fmt=["32"] * len(section3.leads),
         )
+
+class Action(Enum):
+    print_section_headers = 'print-section-headers'
+
+arg_parser = argparse.ArgumentParser()
+arg_parser.add_argument("action", type=Action, choices=list(Action))
+arg_parser.add_argument("--input", type=pathlib.Path)
+
+def main():
+    args = arg_parser.parse_args()
+
+    if args.action == Action.print_section_headers:
+        with args.input.open("rb") as f:
+            file = SCPFile.read(f)
+            headers = file.read_all_section_headers()
+            for header in headers:
+                print(f"Section {header.id:02d}: {header.length_bytes} bytes (section version: {header.section_version}, protocol version: {header.protocol_version})")
+    else:
+        raise NotImplementedError()
+
+if __name__ == "__main__":
+    main()
