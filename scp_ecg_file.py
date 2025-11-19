@@ -49,6 +49,8 @@ class InteractiveReader:
 
 @dataclasses.dataclass
 class SectionHeader:
+    HEADER_LENGTH_BYTES = 16
+
     crc: int
     id: int
     length_bytes: int
@@ -647,6 +649,11 @@ class SCPFile:
 
     def read_header_for_section(self, section: int) -> SectionHeader:
         return SectionHeader.read(InteractiveReader(self.io_for_section(section), "<"))
+
+    def has_section(self, section: int) -> bool:
+        if section not in self.section_pointers:
+            return False
+        return self.read_header_for_section(section).length_bytes > SectionHeader.HEADER_LENGTH_BYTES
 
     def read_all_section_headers(self) -> list[SectionHeader]:
         return [SectionHeader.read(InteractiveReader(self.io_for_section(i), "<")) for i in range(len(self.section_pointers))]
