@@ -278,7 +278,11 @@ class HuffmanTable:
                     end_idx += t[1]
                     bits_value = s[idx:end_idx]
                     idx = end_idx
-                    values.append(int(bits_value.decode(), 2))
+                    value = int(bits_value[1:].decode("ascii"), base=2)
+                    if bits_value[0] == b'1'[0]:
+                        # 2's complement
+                        value = value - (1 << (len(bits_value) - 1))
+                    values.append(value)
 
         if idx != end_idx:
             raise ValueError(
@@ -476,18 +480,33 @@ class Section6:
         datas_mv = []
         for compressed_length_byte in compressed_lengths_byte:
             if tables:
-                raise ValueError("Huffman decoding not supported yet")
+                if len(tables) > 1:
+                    raise ValueError("Multi-huffman is not supported yet")
+                data = np.array(tables[0].decode(r.read_bytes(compressed_length_byte)))
             else:
                 assert (compressed_length_byte % 2) == 0
                 data = []
                 for i in range(compressed_length_byte // 2):
                     data.append(r.read("h"))
                 data = np.array(data)
-                if encoding > 0:
-                    data = np.cumsum(data)
-                if encoding > 1:
-                    data = np.cumsum(data)
-                datas_mv.append(data * (amp_multiplier_nv / 1000 / 1000))
+
+            if encoding == 1:
+                # First value of the data is the actual value (rather than derivative).
+                # This happens to be what cumsum does anyway.
+                data = np.cumsum(data)
+            elif encoding == 2:
+                # First two values of the data are the actual values.
+                # The rest is the second derivative.
+                initial_values = data[:2]
+                # Calculate first value of derivative, the rest is given in the signal.
+                first_derivative_signal = np.cumsum(np.concatenate([[initial_values[1] - initial_values[0]], data[2:]]))
+                # Use first value of signal, the rest is given in the derivative
+                data = np.cumsum(np.concatenate([[initial_values[0]], first_derivative_signal]))
+
+            datas_mv.append(data * (amp_multiplier_nv / 1000 / 1000))
+
+        if self.io.tell() != header.length_bytes:
+            print(f"Warn: Section 6 was not fully decoded ({self.io.tell()} / {header.length_bytes}).")
 
         return DataContainer(
             sample_time_interval_us=sample_time_interval_us, data_mv=datas_mv
@@ -549,6 +568,7 @@ class Section7:
             average_rr_interval_ms=real_measurement(average_rr_interval_ms),
             average_pp_interval_ms=real_measurement(average_pp_interval_ms),
         )
+
 
 @dataclasses.dataclass
 class Section10Measurements:
@@ -683,14 +703,18 @@ class SCPFile:
 
         assert section3.leads_all_simultaneously_recorded
 
+        data_len = min(d.shape[0] for d in container.data_mv)
+        if not all(d.shape[0] == data_len for d in container.data_mv):
+            print("Warn: Data was of inhomogenous length:", [d.shape[0] for d in container.data_mv])
+
         return pd.DataFrame(
-            np.array(container.data_mv).T,
+            np.array([d[:data_len] for d in container.data_mv]).T,
             index=(
-                      np.arange(container.data_mv[0].shape[0])
-                      * container.sample_time_interval_us
-                  )
-                  / 1000
-                  / 1000,
+                np.arange(data_len)
+                * container.sample_time_interval_us
+            )
+            / 1000
+            / 1000,
             columns=[l.get_name() for l in section3.leads],
         )
 
@@ -711,6 +735,7 @@ class SCPFile:
             p_signal=np.array(container.data_mv).T.astype(np.float64),
             fmt=["32"] * len(section3.leads),
         )
+
 
 class Action(Enum):
     print_section_headers = 'print-section-headers'
