@@ -653,9 +653,19 @@ class SCPFile:
 
         header = SectionHeader.read(r)
 
-        pointers = [SectionPointer.read(r) for _ in range(12)]  # 12 are guaranteed
+        pointers = []
+        pointers_read = 0
         while header.length_bytes > r.buffer.tell():  # More as per length
-            pointers.append(SectionPointer.read(r))
+            pointers_read += 1
+            pointer = SectionPointer.read(r)
+            if pointer.index_bytes < 0:
+                assert pointer.index_bytes == -1
+                assert pointer.length_bytes == 0
+                continue # Just included because of the SCP format, not actually here.
+            pointers.append(pointer)
+
+        if pointers_read < 12:
+            print(f"Warn: Read just {pointers_read} pointers, at least 12 were expected.")
 
         return SCPFile(
             io=f,
