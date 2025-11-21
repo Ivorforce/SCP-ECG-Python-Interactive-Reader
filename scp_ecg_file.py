@@ -557,7 +557,7 @@ class DataContainer:
 class Section6:
     io: IOBase
 
-    def read(self, tables: list[HuffmanTable], section3: InterpretedSection3, section1: InterpretedSection1 = None) -> DataContainer:
+    def read(self, tables: list[HuffmanTable], section3: InterpretedSection3) -> DataContainer:
         self.io.seek(0)
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
@@ -856,8 +856,7 @@ class SCPFile:
     def section6_dataframe(self) -> "pd.DataFrame":
         tables = self.section2().read_tables()
         section3 = self.section3().read_and_interpret()
-        section1 = self.section1().read_tags_and_interpret()
-        container = self.section6().read(tables, section3, section1)
+        container = self.section6().read(tables, section3)
 
         assert section3.leads_all_simultaneously_recorded
 
@@ -881,9 +880,8 @@ class SCPFile:
         path = pathlib.Path(path)
 
         tables = self.section2().read_tables()
-        section1 = self.section1().read_tags_and_interpret()
         section3 = self.section3().read_and_interpret()
-        container = self.section6().read(tables, section3, section1)
+        container = self.section6().read(tables, section3)
 
         wfdb.wrsamp(
             record_name=path.stem,
