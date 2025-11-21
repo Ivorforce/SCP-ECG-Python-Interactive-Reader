@@ -157,6 +157,8 @@ class InterpretedSection1:
     acquiring_device: Device = None
     analyzing_device: Device = None
 
+    free_text: str = None
+
     def interpret_tag(self, id: int, data: bytes):
         r = InteractiveReader(BytesIO(data))
 
@@ -288,6 +290,8 @@ class InterpretedSection1:
             self.highpass_filter_3db_hz = r.read("H") / 100
         elif id == 28:
             self.lowpass_filter_3db_hz = r.read("H")
+        elif id == 30:
+            self.free_text = SCPFile.to_text(data)
         elif id == 31:
             self.ecg_sequence_number = SCPFile.to_text(data)
         else:
