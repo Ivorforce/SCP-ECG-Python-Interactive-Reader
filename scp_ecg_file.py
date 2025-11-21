@@ -790,8 +790,11 @@ class SCPFile:
             return False
         return self.read_header_for_section(section).length_bytes > SectionHeader.HEADER_LENGTH_BYTES
 
+    def populated_sections(self) -> list[int]:
+        return [id for id in self.section_pointers if self.has_section(id)]
+
     def read_all_section_headers(self) -> list[SectionHeader]:
-        return [SectionHeader.read(InteractiveReader(self.io_for_section(i), "<")) for i in range(len(self.section_pointers))]
+        return [SectionHeader.read(InteractiveReader(self.io_for_section(id), "<")) for id in self.section_pointers]
 
     def section1(self) -> Section1:
         return Section1(self.io_for_section(1))
