@@ -126,7 +126,7 @@ class InterpretedSection1:
     highpass_filter_3db_hz: float = None
     lowpass_filter_3db_hz: float = None
 
-    ecg_sequence_number: int = None
+    ecg_sequence_number: str = None
 
     def interpret_tag(self, id: int, data: bytes):
         def to_text(b) -> str:
@@ -231,7 +231,7 @@ class InterpretedSection1:
         elif id == 28:
             self.lowpass_filter_3db_hz = r.read("H")
         elif id == 31:
-            self.ecg_sequence_number = int.from_bytes(data, "little")
+            self.ecg_sequence_number = to_text(data)
         else:
             raise ValueError(f"Unsupported tag {id}")
 
