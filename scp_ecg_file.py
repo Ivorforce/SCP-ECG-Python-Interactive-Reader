@@ -120,7 +120,7 @@ class InterpretedSection1:
         acquisition_device_serial_nr: str
         acquisition_device_system_software_id: str
         acquisition_device_scp_software_id: str
-        acquisition_device_manufacterer: str
+        acquisition_device_manufacturer: str
 
     first_name: str = None
     last_name: str = None
@@ -234,7 +234,7 @@ class InterpretedSection1:
                     acquisition_device_serial_nr=strings[1],
                     acquisition_device_system_software_id=strings[2],
                     acquisition_device_scp_software_id=strings[3],
-                    acquisition_device_manufacterer=strings[4],
+                    acquisition_device_manufacturer=strings[4],
                 )
 
             key = "acquiring_device" if id == 14 else "analyzing_device"
