@@ -910,8 +910,12 @@ class SCPFile:
     def section10(self) -> Section10:
         return Section10(self.io_for_section(10))
 
+    def huffman_tables(self) -> list[HuffmanTable]:
+        # [] = default = no huffman encodings used
+        return self.section2().read_tables() if self.has_section(2) else []
+
     def section6_dataframe(self) -> "pd.DataFrame":
-        tables = self.section2().read_tables()
+        tables = self.huffman_tables()
         section3 = self.section3().read_and_interpret()
         container = self.section6().read(tables, section3)
 
@@ -936,7 +940,7 @@ class SCPFile:
         import wfdb
         path = pathlib.Path(path)
 
-        tables = self.section2().read_tables()
+        tables = self.huffman_tables()
         section3 = self.section3().read_and_interpret()
         container = self.section6().read(tables, section3)
 
