@@ -549,10 +549,18 @@ class Section3:
 
 @dataclasses.dataclass
 class Section4Info:
+    @dataclasses.dataclass
+    class SubtractionZone:
+        beat_type: int
+        start_loc_idxs: int
+        qrs_loc_idxs: int
+        end_loc_idxs: int
+
     ref_beat_0_data_length_ms: int
     qrs_point_location_in_ref_beat_0_idxs: int
     number_of_qrs: int
-    has_additional_data_that_was_ignored_on_read: bool
+    subtraction_zones: list[SubtractionZone]
+    has_additional_data_that_wasnt_read: bool
 
 
 @dataclasses.dataclass
@@ -563,12 +571,28 @@ class Section4:
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
 
+        ref_beat_0_data_length_ms = r.read("H")
+        qrs_point_location_in_ref_beat_0_idxs = r.read("H")
+        number_of_qrs = r.read("H")
+
+        subtraction_zones = []
+        if header.length_bytes > r.buffer.tell():
+            # Has subtraction zones
+            for i in range(number_of_qrs):
+                subtraction_zones.append(Section4Info.SubtractionZone(
+                    beat_type=r.read("H"),
+                    start_loc_idxs=r.read("I"),
+                    qrs_loc_idxs=r.read("I"),
+                    end_loc_idxs=r.read("I"),
+                ))
+
         return Section4Info(
-            ref_beat_0_data_length_ms=r.read("H"),
-            qrs_point_location_in_ref_beat_0_idxs=r.read("H"),
-            number_of_qrs=r.read("H"),
-            # TODO Support
-            has_additional_data_that_was_ignored_on_read=header.length_bytes > r.buffer.tell(),
+            ref_beat_0_data_length_ms=ref_beat_0_data_length_ms,
+            qrs_point_location_in_ref_beat_0_idxs=qrs_point_location_in_ref_beat_0_idxs,
+            number_of_qrs=number_of_qrs,
+            subtraction_zones=subtraction_zones,
+            # TODO Read
+            has_additional_data_that_wasnt_read=header.length_bytes > r.buffer.tell(),
         )
 
 
@@ -582,7 +606,7 @@ class DataContainer:
 class Section6:
     io: IOBase
 
-    def read(self, tables: list[HuffmanTable], section3: InterpretedSection3, section1: InterpretedSection1 = None) -> DataContainer:
+    def read(self, tables: list[HuffmanTable], section3: InterpretedSection3) -> DataContainer:
         self.io.seek(0)
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
@@ -596,6 +620,7 @@ class Section6:
 
         assert encoding in (0, 1, 2), f"Encoding not supported: {encoding}"
         assert compression == 0, f"Compression not supported: {compression}"
+        assert not section3.is_reference_beat_subtraction_used_for_compression, "Reference beat subtraction not supported."
 
         compressed_lengths_byte = []
         for lead in section3.leads:
