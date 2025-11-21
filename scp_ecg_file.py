@@ -594,18 +594,13 @@ class Section6:
                 # This happens to be what cumsum does anyway.
                 data = np.cumsum(data)
             elif encoding == 2:
-                if section1 is not None and section1.acquiring_device is not None and section1.acquiring_device.acquisition_device_manufacturer == "ECGConversion":
-                    # This manufacturer incorrectly stores its data... :<
-                    # They assume the leads all start at 0, and then store the second derivative
-                    data = np.cumsum(np.cumsum(data))
-                else:
-                    # First two values of the data are the actual values.
-                    # The rest is the second derivative.
-                    initial_values = data[:2]
-                    # Calculate first value of derivative, the rest is given in the signal.
-                    first_derivative_signal = np.cumsum(np.concatenate([[initial_values[1] - initial_values[0]], data[2:]]))
-                    # Use first value of signal, the rest is given in the derivative
-                    data = np.cumsum(np.concatenate([[initial_values[0]], first_derivative_signal]))
+                # First two values of the data are the actual values.
+                # The rest is the second derivative.
+                initial_values = data[:2]
+                # Calculate first value of derivative, the rest is given in the signal.
+                first_derivative_signal = np.cumsum(np.concatenate([[initial_values[1] - initial_values[0]], data[2:]]))
+                # Use first value of signal, the rest is given in the derivative
+                data = np.cumsum(np.concatenate([[initial_values[0]], first_derivative_signal]))
 
             datas_mv.append(data * (amp_multiplier_nv / 1000 / 1000))
 
