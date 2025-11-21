@@ -2,6 +2,7 @@ import dataclasses
 from datetime import datetime, timedelta, time, date
 from enum import Enum
 from typing import Any
+
 try:
     import pandas as pd
 except ImportError:
@@ -11,6 +12,7 @@ import struct
 from io import BytesIO, IOBase
 import numpy as np
 import argparse
+
 
 @dataclasses.dataclass
 class InteractiveReader:
@@ -108,13 +110,13 @@ class InterpretedSection1:
         department_nr: int
         device_id: int
         device_type: DeviceType
-        manufacturer_id: int # 255 to specify as string, legacy systems print one of an enum
+        manufacturer_id: int  # 255 to specify as string, legacy systems print one of an enum
         text_model: str
         scp_ecg_protocol_rev_nr: int
         scp_ecg_protocol_compat_level: int
         language_support_bitmap: int
         capabilities_bitmap: int
-        ac_mains_frequency_hz: int # -1 for 'unspecified'
+        ac_mains_frequency_hz: int  # -1 for 'unspecified'
         reserved_for_future_use: bytes
         analysing_program_revision_nr: str
         acquisition_device_serial_nr: str
@@ -156,19 +158,16 @@ class InterpretedSection1:
     analyzing_device: Device = None
 
     def interpret_tag(self, id: int, data: bytes):
-        def to_text(b) -> str:
-            return b.decode("iso-8859-1").rstrip("\0")
-
         r = InteractiveReader(BytesIO(data))
 
         if id == 0:
-            self.last_name = to_text(data)
+            self.last_name = SCPFile.to_text(data)
         elif id == 1:
-            self.first_name = to_text(data)
+            self.first_name = SCPFile.to_text(data)
         elif id == 2:
-            self.patient_id = to_text(data)
+            self.patient_id = SCPFile.to_text(data)
         elif id == 3:
-            self.second_last_name = to_text(data)
+            self.second_last_name = SCPFile.to_text(data)
         elif id == 4:
             age_num = r.read("H")
             age_unit = r.read("B")
@@ -227,14 +226,14 @@ class InterpretedSection1:
                 self.sex = InterpretedSection1.Sex.Other
         elif id == 14 or id == 15:
             def read_final_strings(r: InteractiveReader):
-                length_of_first_string = r.read("B") # Not needed?
+                length_of_first_string = r.read("B")  # Not needed?
                 strings = r.read_bytes(len(data) - r.buffer.tell()).split(b'\0')
                 return dict(
-                    analysing_program_revision_nr=to_text(strings[0]),
-                    acquisition_device_serial_nr=to_text(strings[1]),
-                    acquisition_device_system_software_id=to_text(strings[2]),
-                    acquisition_device_scp_software_id=to_text(strings[3]),
-                    acquisition_device_manufacturer=to_text(strings[4]),
+                    analysing_program_revision_nr=SCPFile.to_text(strings[0]),
+                    acquisition_device_serial_nr=SCPFile.to_text(strings[1]),
+                    acquisition_device_system_software_id=SCPFile.to_text(strings[2]),
+                    acquisition_device_scp_software_id=SCPFile.to_text(strings[3]),
+                    acquisition_device_manufacturer=SCPFile.to_text(strings[4]),
                 )
 
             key = "acquiring_device" if id == 14 else "analyzing_device"
@@ -244,7 +243,7 @@ class InterpretedSection1:
                 device_id=r.read("H"),
                 device_type=InterpretedSection1.Device.DeviceType(r.read("B")),
                 manufacturer_id=r.read("B"),
-                text_model=to_text(r.read_bytes(6)),
+                text_model=SCPFile.to_text(r.read_bytes(6)),
                 scp_ecg_protocol_rev_nr=r.read("B"),
                 scp_ecg_protocol_compat_level=r.read("B"),
                 language_support_bitmap=r.read("B"),
@@ -258,21 +257,21 @@ class InterpretedSection1:
                 **read_final_strings(r)
             ))
         elif id == 16:
-            self.acquiring_institution = to_text(data)
+            self.acquiring_institution = SCPFile.to_text(data)
         elif id == 17:
-            self.analyzing_institution = to_text(data)
+            self.analyzing_institution = SCPFile.to_text(data)
         elif id == 18:
-            self.acquiring_department = to_text(data)
+            self.acquiring_department = SCPFile.to_text(data)
         elif id == 19:
-            self.analyzing_department = to_text(data)
+            self.analyzing_department = SCPFile.to_text(data)
         elif id == 20:
-            self.referring_physician = to_text(data)
+            self.referring_physician = SCPFile.to_text(data)
         elif id == 21:
-            self.latest_confirming_physician = to_text(data)
+            self.latest_confirming_physician = SCPFile.to_text(data)
         elif id == 22:
-            self.technician = to_text(data)
+            self.technician = SCPFile.to_text(data)
         elif id == 23:
-            self.room = to_text(data)
+            self.room = SCPFile.to_text(data)
         elif id == 25:
             self.date_of_acquisition = date(
                 year=r.read("H"),
@@ -290,7 +289,7 @@ class InterpretedSection1:
         elif id == 28:
             self.lowpass_filter_3db_hz = r.read("H")
         elif id == 31:
-            self.ecg_sequence_number = to_text(data)
+            self.ecg_sequence_number = SCPFile.to_text(data)
         else:
             raise ValueError(f"Unsupported tag {id}")
 
@@ -676,6 +675,44 @@ class Section7:
 
 
 @dataclasses.dataclass
+class Section8Info:
+    class ConfirmationStatus(Enum):
+        ORIGINAL_REPORT = 0
+        CONFIRMED_REPORT = 1
+        OVERREAD_REPORT_BUT_NOT_CONFIRMED = 2
+
+    confirmation_status: ConfirmationStatus
+    date_and_time: datetime
+    statements: list[str]
+
+
+@dataclasses.dataclass
+class Section8:
+    io: IOBase
+
+    def read(self) -> Section8Info:
+        self.io.seek(0)
+        r = InteractiveReader(self.io, "<")
+        header = SectionHeader.read(r)
+
+        return Section8Info(
+            confirmation_status=Section8Info.ConfirmationStatus(r.read("B")),
+            date_and_time=datetime(
+                year=r.read("H"),
+                month=r.read("B"),
+                day=r.read("B"),
+                hour=r.read("B"),
+                minute=r.read("B"),
+                second=r.read("B")
+            ),
+            statements=[
+                SCPFile.to_text(r.read_bytes(r.read("H")))
+                for i in range(r.read("B"))
+            ]
+        )
+
+
+@dataclasses.dataclass
 class Section10Measurements:
     lead_id: int = None
     length_of_record: int = None
@@ -743,6 +780,10 @@ class Section10:
 
 @dataclasses.dataclass
 class SCPFile:
+    @staticmethod
+    def to_text(b: bytes) -> str:
+        return b.decode("iso-8859-1").rstrip("\0")
+
     section_pointers: dict[int, SectionPointer]
     io: IOBase
 
@@ -766,7 +807,7 @@ class SCPFile:
             if pointer.index_bytes < 0:
                 assert pointer.index_bytes == -1
                 assert pointer.length_bytes == 0
-                continue # Just included because of the SCP format, not actually here.
+                continue  # Just included because of the SCP format, not actually here.
             pointers.append(pointer)
 
         if pointers_read < 12:
@@ -811,6 +852,9 @@ class SCPFile:
     def section7(self) -> Section7:
         return Section7(self.io_for_section(7))
 
+    def section8(self) -> Section8:
+        return Section8(self.io_for_section(8))
+
     def section10(self) -> Section10:
         return Section10(self.io_for_section(10))
 
@@ -829,11 +873,11 @@ class SCPFile:
         return pd.DataFrame(
             np.array([d[:data_len] for d in container.data_mv]).T,
             index=(
-                np.arange(data_len)
-                * container.sample_time_interval_us
-            )
-            / 1000
-            / 1000,
+                      np.arange(data_len)
+                      * container.sample_time_interval_us
+                  )
+                  / 1000
+                  / 1000,
             columns=[l.get_name() for l in section3.leads],
         )
 
