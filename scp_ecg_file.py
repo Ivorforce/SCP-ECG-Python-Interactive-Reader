@@ -212,6 +212,11 @@ class Section1:
         result = dict()
         while header.length_bytes > r.buffer.tell():
             id = r.read("B")
+            if id == 255:
+                # 255 = "Header Terminator"
+                # Header should contain one more length and may contain a padding byte
+                # But since we had the terminator, it's fine to just break here.
+                break
             data_len = r.read("H")
             if data_len == 0:
                 continue  # Length of 0 means "not defined"
