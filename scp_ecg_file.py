@@ -670,7 +670,7 @@ class Section7:
 
 
 @dataclasses.dataclass
-class Section8Info:
+class SCPFreeStatements:
     class ConfirmationStatus(Enum):
         ORIGINAL_REPORT = 0
         CONFIRMED_REPORT = 1
@@ -685,13 +685,13 @@ class Section8Info:
 class Section8:
     io: IOBase
 
-    def read(self) -> Section8Info:
+    def read(self) -> SCPFreeStatements:
         self.io.seek(0)
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
 
-        return Section8Info(
-            confirmation_status=Section8Info.ConfirmationStatus(r.read("B")),
+        return SCPFreeStatements(
+            confirmation_status=SCPFreeStatements.ConfirmationStatus(r.read("B")),
             date_and_time=datetime(
                 year=r.read("H"),
                 month=r.read("B"),
