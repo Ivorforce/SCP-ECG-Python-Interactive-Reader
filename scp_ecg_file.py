@@ -230,11 +230,11 @@ class InterpretedSection1:
                 length_of_first_string = r.read("B") # Not needed?
                 strings = r.read_bytes(len(data) - r.buffer.tell()).split(b'\0')
                 return dict(
-                    analysing_program_revision_nr=strings[0],
-                    acquisition_device_serial_nr=strings[1],
-                    acquisition_device_system_software_id=strings[2],
-                    acquisition_device_scp_software_id=strings[3],
-                    acquisition_device_manufacturer=strings[4],
+                    analysing_program_revision_nr=to_text(strings[0]),
+                    acquisition_device_serial_nr=to_text(strings[1]),
+                    acquisition_device_system_software_id=to_text(strings[2]),
+                    acquisition_device_scp_software_id=to_text(strings[3]),
+                    acquisition_device_manufacturer=to_text(strings[4]),
                 )
 
             key = "acquiring_device" if id == 14 else "analyzing_device"
@@ -558,7 +558,7 @@ class DataContainer:
 class Section6:
     io: IOBase
 
-    def read(self, tables: list[HuffmanTable], section3: InterpretedSection3) -> DataContainer:
+    def read(self, tables: list[HuffmanTable], section3: InterpretedSection3, section1: InterpretedSection1 = None) -> DataContainer:
         self.io.seek(0)
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
@@ -595,13 +595,18 @@ class Section6:
                 # This happens to be what cumsum does anyway.
                 data = np.cumsum(data)
             elif encoding == 2:
-                # First two values of the data are the actual values.
-                # The rest is the second derivative.
-                initial_values = data[:2]
-                # Calculate first value of derivative, the rest is given in the signal.
-                first_derivative_signal = np.cumsum(np.concatenate([[initial_values[1] - initial_values[0]], data[2:]]))
-                # Use first value of signal, the rest is given in the derivative
-                data = np.cumsum(np.concatenate([[initial_values[0]], first_derivative_signal]))
+                if section1 is not None and section1.acquiring_device is not None and section1.acquiring_device.acquisition_device_manufacturer == "ECGConversion":
+                    # This manufacturer incorrectly stores its data... :<
+                    # They assume the leads all start at 0, and then store the second derivative
+                    data = np.cumsum(np.cumsum(data))
+                else:
+                    # First two values of the data are the actual values.
+                    # The rest is the second derivative.
+                    initial_values = data[:2]
+                    # Calculate first value of derivative, the rest is given in the signal.
+                    first_derivative_signal = np.cumsum(np.concatenate([[initial_values[1] - initial_values[0]], data[2:]]))
+                    # Use first value of signal, the rest is given in the derivative
+                    data = np.cumsum(np.concatenate([[initial_values[0]], first_derivative_signal]))
 
             datas_mv.append(data * (amp_multiplier_nv / 1000 / 1000))
 
@@ -809,7 +814,8 @@ class SCPFile:
     def section6_dataframe(self) -> "pd.DataFrame":
         tables = self.section2().read_tables()
         section3 = self.section3().read_and_interpret()
-        container = self.section6().read(tables, section3)
+        section1 = self.section1().read_tags_and_interpret()
+        container = self.section6().read(tables, section3, section1)
 
         assert section3.leads_all_simultaneously_recorded
 
@@ -833,8 +839,9 @@ class SCPFile:
         path = pathlib.Path(path)
 
         tables = self.section2().read_tables()
+        section1 = self.section1().read_tags_and_interpret()
         section3 = self.section3().read_and_interpret()
-        container = self.section6().read(tables, section3)
+        container = self.section6().read(tables, section3, section1)
 
         wfdb.wrsamp(
             record_name=path.stem,
