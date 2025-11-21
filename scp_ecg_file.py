@@ -98,6 +98,30 @@ class InterpretedSection1:
         Unspecified = 9
         Other = 10
 
+    @dataclasses.dataclass
+    class Device:
+        class DeviceType(Enum):
+            Cart = 0
+            SystemOrHost = 1
+
+        institution_nr: int
+        department_nr: int
+        device_id: int
+        device_type: DeviceType
+        manufacturer_id: int # 255 to specify as string, legacy systems print one of an enum
+        text_model: str
+        scp_ecg_protocol_rev_nr: int
+        scp_ecg_protocol_compat_level: int
+        language_support_bitmap: int
+        capabilities_bitmap: int
+        ac_mains_frequency_hz: int # -1 for 'unspecified'
+        reserved_for_future_use: bytes
+        analysing_program_revision_nr: str
+        acquisition_device_serial_nr: str
+        acquisition_device_system_software_id: str
+        acquisition_device_scp_software_id: str
+        acquisition_device_manufacterer: str
+
     first_name: str = None
     last_name: str = None
     second_last_name: str = None
@@ -127,6 +151,9 @@ class InterpretedSection1:
     lowpass_filter_3db_hz: float = None
 
     ecg_sequence_number: str = None
+
+    acquiring_device: Device = None
+    analyzing_device: Device = None
 
     def interpret_tag(self, id: int, data: bytes):
         def to_text(b) -> str:
@@ -198,6 +225,38 @@ class InterpretedSection1:
                 self.sex = InterpretedSection1.Sex(r.read("B"))
             except ValueError:
                 self.sex = InterpretedSection1.Sex.Other
+        elif id == 14 or id == 15:
+            def read_final_strings(r: InteractiveReader):
+                length_of_first_string = r.read("B") # Not needed?
+                strings = r.read_bytes(len(data) - r.buffer.tell()).split(b'\0')
+                return dict(
+                    analysing_program_revision_nr=strings[0],
+                    acquisition_device_serial_nr=strings[1],
+                    acquisition_device_system_software_id=strings[2],
+                    acquisition_device_scp_software_id=strings[3],
+                    acquisition_device_manufacterer=strings[4],
+                )
+
+            key = "acquiring_device" if id == 14 else "analyzing_device"
+            setattr(self, key, InterpretedSection1.Device(
+                institution_nr=r.read("H"),
+                department_nr=r.read("H"),
+                device_id=r.read("H"),
+                device_type=InterpretedSection1.Device.DeviceType(r.read("B")),
+                manufacturer_id=r.read("B"),
+                text_model=to_text(r.read_bytes(6)),
+                scp_ecg_protocol_rev_nr=r.read("B"),
+                scp_ecg_protocol_compat_level=r.read("B"),
+                language_support_bitmap=r.read("B"),
+                capabilities_bitmap=r.read("B"),
+                ac_mains_frequency_hz={
+                    0: -1,
+                    1: 50,
+                    2: 60
+                }.get(r.read("B"), None),
+                reserved_for_future_use=r.read_bytes(16),
+                **read_final_strings(r)
+            ))
         elif id == 16:
             self.acquiring_institution = to_text(data)
         elif id == 17:
