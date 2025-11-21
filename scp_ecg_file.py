@@ -552,25 +552,24 @@ class Section4Info:
     ref_beat_0_data_length_ms: int
     qrs_point_location_in_ref_beat_0_idxs: int
     number_of_qrs: int
+    has_additional_data_that_was_ignored_on_read: bool
 
 
 @dataclasses.dataclass
 class Section4:
     io: IOBase
 
-    def read(self) -> InterpretedSection3:
+    def read(self) -> Section4Info:
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
 
-        info = Section4Info(
+        return Section4Info(
             ref_beat_0_data_length_ms=r.read("H"),
             qrs_point_location_in_ref_beat_0_idxs=r.read("H"),
-            number_of_qrs=r.read("H")
+            number_of_qrs=r.read("H"),
+            # TODO Support
+            has_additional_data_that_was_ignored_on_read=header.length_bytes > r.buffer.tell(),
         )
-        if header.length_bytes > r.buffer.tell():
-            print("Warn: Section 4 QRS data not read")
-
-        return info
 
 
 @dataclasses.dataclass
