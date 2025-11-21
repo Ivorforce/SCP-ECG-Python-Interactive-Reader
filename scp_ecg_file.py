@@ -123,6 +123,11 @@ class InterpretedSection1:
     technician: str = None
     room: str = None
 
+    highpass_filter_3db_hz: float = None
+    lowpass_filter_3db_hz: float = None
+
+    ecg_sequence_number: int = None
+
     def interpret_tag(self, id: int, data: bytes):
         def to_text(b) -> str:
             return b.decode("iso-8859-1").rstrip("\0")
@@ -221,6 +226,12 @@ class InterpretedSection1:
                 minute=r.read("B"),
                 second=r.read("B"),
             )
+        elif id == 27:
+            self.highpass_filter_3db_hz = r.read("H") / 100
+        elif id == 28:
+            self.lowpass_filter_3db_hz = r.read("H")
+        elif id == 31:
+            self.ecg_sequence_number = int.from_bytes(data, "little")
         else:
             raise ValueError(f"Unsupported tag {id}")
 
