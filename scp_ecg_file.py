@@ -548,6 +548,32 @@ class Section3:
 
 
 @dataclasses.dataclass
+class Section4Info:
+    ref_beat_0_data_length_ms: int
+    qrs_point_location_in_ref_beat_0_idxs: int
+    number_of_qrs: int
+
+
+@dataclasses.dataclass
+class Section4:
+    io: IOBase
+
+    def read(self) -> InterpretedSection3:
+        r = InteractiveReader(self.io, "<")
+        header = SectionHeader.read(r)
+
+        info = Section4Info(
+            ref_beat_0_data_length_ms=r.read("H"),
+            qrs_point_location_in_ref_beat_0_idxs=r.read("H"),
+            number_of_qrs=r.read("H")
+        )
+        if header.length_bytes > r.buffer.tell():
+            print("Warn: Section 4 QRS data not read")
+
+        return info
+
+
+@dataclasses.dataclass
 class DataContainer:
     sample_time_interval_us: int
     data_mv: list[np.ndarray]
@@ -557,7 +583,7 @@ class DataContainer:
 class Section6:
     io: IOBase
 
-    def read(self, tables: list[HuffmanTable], section3: InterpretedSection3) -> DataContainer:
+    def read(self, tables: list[HuffmanTable], section3: InterpretedSection3, section1: InterpretedSection1 = None) -> DataContainer:
         self.io.seek(0)
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
@@ -840,6 +866,9 @@ class SCPFile:
 
     def section3(self) -> Section3:
         return Section3(self.io_for_section(3))
+
+    def section4(self) -> Section4:
+        return Section4(self.io_for_section(4))
 
     def section6(self) -> Section6:
         return Section6(self.io_for_section(6))
