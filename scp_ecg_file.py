@@ -114,6 +114,15 @@ class InterpretedSection1:
     date_of_acquisition: date = None
     time_of_acquisition: time = None
 
+    acquiring_institution: str = None
+    analyzing_institution: str = None
+    acquiring_department: str = None
+    analyzing_department: str = None
+    referring_physician: str = None
+    latest_confirming_physician: str = None
+    technician: str = None
+    room: str = None
+
     def interpret_tag(self, id: int, data: bytes):
         def to_text(b) -> str:
             return b.decode("iso-8859-1").rstrip("\0")
@@ -184,6 +193,22 @@ class InterpretedSection1:
                 self.sex = InterpretedSection1.Sex(r.read("B"))
             except ValueError:
                 self.sex = InterpretedSection1.Sex.Other
+        elif id == 16:
+            self.acquiring_institution = to_text(data)
+        elif id == 17:
+            self.analyzing_institution = to_text(data)
+        elif id == 18:
+            self.acquiring_department = to_text(data)
+        elif id == 19:
+            self.analyzing_department = to_text(data)
+        elif id == 20:
+            self.referring_physician = to_text(data)
+        elif id == 21:
+            self.latest_confirming_physician = to_text(data)
+        elif id == 22:
+            self.technician = to_text(data)
+        elif id == 23:
+            self.room = to_text(data)
         elif id == 25:
             self.date_of_acquisition = date(
                 year=r.read("H"),
