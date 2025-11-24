@@ -915,15 +915,19 @@ class SCPFile:
         return self.section2().read_tables() if self.has_section(2) else []
 
     def section6_dataframe(self) -> "pd.DataFrame":
-        tables = self.huffman_tables()
+        tables = self.section2().read_tables()
         section3 = self.section3().read_and_interpret()
         container = self.section6().read(tables, section3)
 
         assert section3.leads_all_simultaneously_recorded
 
-        data_len = min(d.shape[0] for d in container.data_mv)
-        if not all(d.shape[0] == data_len for d in container.data_mv):
-            print("Warn: Data was of inhomogenous length:", [d.shape[0] for d in container.data_mv])
+        data_len = section3.leads[0].ending_sample_idx - section3.leads[0].starting_sample_idx
+        assert all(lead.ending_sample_idx - lead.starting_sample_idx >= data_len for lead in section3.leads), f"Leads of different lengths: {[lead.ending_sample_idx - lead.starting_sample_idx for lead in section3.leads]}"
+
+        data_mv = []
+        for lead_data, lead_info in zip(container.data_mv, section3.leads):
+            assert lead_info.starting_sample_idx >= 0 and lead_info.ending_sample_idx <= lead_data.shape[0]
+            data_mv.append(lead_data[lead_info.starting_sample_idx:lead_info.ending_sample_idx])
 
         return pd.DataFrame(
             np.array([d[:data_len] for d in container.data_mv]).T,
@@ -944,13 +948,23 @@ class SCPFile:
         section3 = self.section3().read_and_interpret()
         container = self.section6().read(tables, section3)
 
+        assert section3.leads_all_simultaneously_recorded
+
+        data_len = section3.leads[0].ending_sample_idx - section3.leads[0].starting_sample_idx
+        assert all(lead.ending_sample_idx - lead.starting_sample_idx >= data_len for lead in section3.leads), f"Leads of different lengths: {[lead.ending_sample_idx - lead.starting_sample_idx for lead in section3.leads]}"
+
+        data_mv = []
+        for lead_data, lead_info in zip(container.data_mv, section3.leads):
+            assert lead_info.starting_sample_idx >= 0 and lead_info.ending_sample_idx <= lead_data.shape[0]
+            data_mv.append(lead_data[lead_info.starting_sample_idx:lead_info.ending_sample_idx])
+
         wfdb.wrsamp(
             record_name=path.stem,
             fs=(1000 * 1000) / container.sample_time_interval_us,
             write_dir=str(path.parent),
             units=["mv"] * len(section3.leads),
             sig_name=[l.get_name() for l in section3.leads],
-            p_signal=np.array(container.data_mv).T.astype(np.float64),
+            p_signal=np.array(data_mv).T.T.astype(np.float64),
             fmt=["32"] * len(section3.leads),
         )
 
