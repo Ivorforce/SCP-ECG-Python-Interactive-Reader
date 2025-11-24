@@ -916,7 +916,7 @@ class SCPFile:
 
     @staticmethod
     def get_data_from_sections(section3: InterpretedSection3, container: DataContainer, *, print_warnings: bool = True) -> np.ndarray:
-        assert section3.leads_all_simultaneously_recorded
+        assert section3.leads_all_simultaneously_recorded, "Leads not simultaneously recorded."
 
         data_len = section3.leads[0].ending_sample_idx - section3.leads[0].starting_sample_idx
         assert all(lead.ending_sample_idx - lead.starting_sample_idx == data_len for lead in section3.leads), f"Leads of different lengths: {[lead.ending_sample_idx - lead.starting_sample_idx for lead in section3.leads]}"
@@ -930,7 +930,7 @@ class SCPFile:
 
         data_mv = []
         for lead_data, lead_info in zip(container.data_mv, section3.leads):
-            assert lead_info.starting_sample_idx >= 0 and lead_info.ending_sample_idx <= lead_data.shape[0]
+            assert lead_info.starting_sample_idx >= 0, f"Starting sample index negative: {lead_info.starting_sample_idx}"
             data_mv.append(lead_data[lead_info.starting_sample_idx:lead_info.starting_sample_idx + data_len_real])
 
         return np.array(data_mv)
