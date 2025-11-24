@@ -366,6 +366,7 @@ class HuffmanTable:
 
     def decode(self, b: bytes) -> list[int]:
         values: list[int] = []
+        # TODO Could maybe use numpy.unpackbits, for efficiency reasons
         s = bytes((bit.encode("ascii")[0] for byte in b for bit in f'{byte:08b}'))
         idx = 0
         end_idx = 0
