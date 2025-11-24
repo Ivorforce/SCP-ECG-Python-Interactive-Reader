@@ -915,16 +915,18 @@ class SCPFile:
         return self.section2().read_tables() if self.has_section(2) else []
 
     @staticmethod
-    def get_data_from_sections(section3: InterpretedSection3, container: DataContainer) -> np.ndarray:
+    def get_data_from_sections(section3: InterpretedSection3, container: DataContainer, *, print_warnings: bool = True) -> np.ndarray:
         assert section3.leads_all_simultaneously_recorded
 
         data_len = section3.leads[0].ending_sample_idx - section3.leads[0].starting_sample_idx
         assert all(lead.ending_sample_idx - lead.starting_sample_idx == data_len for lead in section3.leads), f"Leads of different lengths: {[lead.ending_sample_idx - lead.starting_sample_idx for lead in section3.leads]}"
 
-        data_len_real = min(lead_data.shape[0] - lead_info.starting_sample_idx for lead_data, lead_info in zip(container.data_mv, section3.leads))
+        len_per_lead_real = [lead_data.shape[0] - lead_info.starting_sample_idx for lead_data, lead_info in zip(container.data_mv, section3.leads)]
+        data_len_real = min(len_per_lead_real)
         if data_len_real < data_len:
-            assert data_len - data_len_real < 1000, f"Some leads' actual data was substantially shorter than expected. Expected: {data_len}, actual: {[lead.ending_sample_idx - lead.starting_sample_idx for lead in section3.leads]}"
-            print(f"Some leads' actual data was shorter than expected. Expected: {data_len}, actual: {[lead.ending_sample_idx - lead.starting_sample_idx for lead in section3.leads]}")
+            assert data_len - data_len_real < 1000, f"Some leads' actual data was substantially shorter than expected. Expected: {data_len}, actual: {len_per_lead_real}"
+            if print_warnings:
+                print(f"Some leads' actual data was shorter than expected. Expected: {data_len}, actual: {len_per_lead_real}")
 
         data_mv = []
         for lead_data, lead_info in zip(container.data_mv, section3.leads):
