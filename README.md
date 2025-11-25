@@ -42,11 +42,11 @@ The support in this implementation is need-directed, and thus a lot of features 
 - Section 1: Contains record description tags.
 - Section 2: May contain huffman tables to read the file. This is not fully supported yet (some files are not encoded with huffman tables).
 - Section 3: Contains lead information.
-- Section 4: Contains QRS locations, reference beat subtraction zones, and protected areas (partially supported)
+- Section 4: Contains QRS locations, reference beat subtraction zones, and protected areas (partially supported).
 - ~~Section 5: Reference beat data (not supported)~~
 - Section 3: Contains lead information.
 - Section 6: Contains ECG data.
-- Section 7: Contains ECG per beat metadata.
+- Section 7: Contains ECG per beat metadata (partially supported).
 - Section 8: Contains a number of string statements.
 - ~~Section 9: Manufacturer specific information (not supported)~~
 - Section 10: Contains global ECG metadata.

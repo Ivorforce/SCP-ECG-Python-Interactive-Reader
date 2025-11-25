@@ -681,22 +681,60 @@ class BeatMeasurements:
 
 @dataclasses.dataclass
 class InterpretedSection7:
+    @dataclasses.dataclass
+    class PacemakerSpikeInfo:
+        class SpikeType(Enum):
+            UNKNOWN = 0
+            SPIKE_TRIGGERS_NEITHER_P_WAVE_NOR_QRS = 1
+            SPIKE_TRIGGERS_QRS = 2
+            SPIKE_TRIGGERS_P_WAVE = 3
+            OTHER = 4
+            NO_SPIKE_ANALYSIS_PERFORMED = 255
+
+        class SpikeSource(Enum):
+            UNKNOWN = 0
+            INTERNAL = 1
+            EXTERNAL = 2
+            OTHER = 3
+
+        loc_ms: int
+        amplitude_uv: int
+        spike_type: SpikeType = None
+        spike_source: SpikeSource = None
+        index_of_triggered_qrs: int = None
+        pulse_width_us: int = None
+
+    class HRCorrectionFormulaType(Enum):
+        UNKNOWN_OR_UNSPECIFIED = 0
+        BAZETT = 1
+        HODGES = 2
+        OTHER = 4
+        MEASUREMENT_NOT_AVAILABLE = 255
+
     reference_beat_measurements: list[BeatMeasurements]
+    individual_beat_measurements: list[BeatMeasurements]
+    reference_beat_type_by_individual_beat: list[int]
+
+    pacemaker_spike_infos: list[PacemakerSpikeInfo]
 
     average_rr_interval_ms: int
     average_pp_interval_ms: int
 
+    ventricular_rate_bpm: int
+    atrial_rate_bpm: int
+    qtc_ms: int
+    formula_type_used_for_heart_rate_correction: HRCorrectionFormulaType
 
 @dataclasses.dataclass
 class Section7:
     io: IOBase
 
-    def read(self) -> InterpretedSection7:
+    def read_and_interpret(self) -> InterpretedSection7:
         self.io.seek(0)
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
 
-        number_of_reference_beat_types = r.read("B")
+        number_of_beat_measurements = r.read("B")
         number_of_pacemaker_spikes = r.read("B")
         average_rr_interval_ms = r.read("H")
         average_pp_interval_ms = r.read("H")
@@ -705,7 +743,7 @@ class Section7:
             return measurement if measurement not in (29999, 29998, 19999) else None
 
         beat_measurements = []
-        for i in range(number_of_reference_beat_types):
+        for i in range(number_of_beat_measurements):
             beat_measurements.append(BeatMeasurements(
                 p_onset_ms=real_measurement(r.read("H")),
                 p_offset_ms=real_measurement(r.read("H")),
@@ -716,11 +754,75 @@ class Section7:
                 qrs_axis_in_frontal_plane_deg=real_measurement(r.read("H")),
                 t_axis_in_frontal_plane_deg=real_measurement(r.read("H")),
             ))
+
+        pacemaker_spike_infos = [
+            InterpretedSection7.PacemakerSpikeInfo(
+                loc_ms=r.read("H"),
+                amplitude_uv=r.read("h"),
+            )
+            for i in range(number_of_pacemaker_spikes)
+        ]
+
+        for i in range (number_of_pacemaker_spikes):
+            try:
+                pacemaker_spike_infos[i].spike_type = InterpretedSection7.PacemakerSpikeInfo.SpikeType(r.read("B"))
+            except ValueError:
+                pacemaker_spike_infos[i].spike_type = InterpretedSection7.PacemakerSpikeInfo.SpikeType.OTHER
+            try:
+                pacemaker_spike_infos[i].spike_source = InterpretedSection7.PacemakerSpikeInfo.SpikeSource(r.read("B"))
+            except ValueError:
+                pacemaker_spike_infos[i].spike_type = InterpretedSection7.PacemakerSpikeInfo.SpikeSource.OTHER
+
+            triggered_qrs_idx = r.read("H")
+            pacemaker_spike_infos[i].index_of_triggered_qrs = (triggered_qrs_idx - 1) if triggered_qrs_idx > 0 else None
+            pulse_width_us = r.read("H")
+            pacemaker_spike_infos[i].pulse_width_us = pulse_width_us if pulse_width_us > 0 else None
+
+        number_of_qrs_complexes = r.read("H")
+        reference_beat_type_by_individual_beat = [
+            r.read("B") for i in range(number_of_qrs_complexes)
+        ]
+
+        individual_beat_measurements = []
+        if number_of_beat_measurements == number_of_qrs_complexes + 1:
+            # First is always a reference, but the rest are now individual qrs measurements
+            individual_beat_measurements = beat_measurements[1:]
+            beat_measurements = beat_measurements[:1]
+
+        ventricular_rate_bpm = r.read("H")
+        atrial_rate_bpm = r.read("H")
+        qtc_ms = r.read("H")
+        formula_type_used_for_heart_rate_correction_int = r.read("B")
+        number_of_bytes_in_tagged_fields = r.read("H")
+
+        if formula_type_used_for_heart_rate_correction_int == 47 and number_of_bytes_in_tagged_fields == 12149:
+            # Specific manufacturer who misread the specs and used 2-byte 29999 for both "formula type" and "number_of_bytes_in_tagged_fields"
+            # We now need to consume one additional byte and assume both are 'unspecified'
+            r.read_bytes(1)
+            formula_type_used_for_heart_rate_correction = InterpretedSection7.HRCorrectionFormulaType.UNKNOWN_OR_UNSPECIFIED
+        else:
+            try:
+                formula_type_used_for_heart_rate_correction = InterpretedSection7.HRCorrectionFormulaType(formula_type_used_for_heart_rate_correction_int)
+            except ValueError:
+                formula_type_used_for_heart_rate_correction = InterpretedSection7.HRCorrectionFormulaType.OTHER
+            if number_of_bytes_in_tagged_fields > 0:
+                print(f"Ignoring unsupported tagged global measurements ({number_of_bytes_in_tagged_fields})")
+
+            if header.length_bytes > r.buffer.tell():
+                print(f"Warn: Section 7 contains additional data that was ignored (unsupported, {r.buffer.tell()} / {header.length_bytes} read).")
+                print([b for b in r.read_bytes(header.length_bytes - r.buffer.tell())])
+
         return InterpretedSection7(
-            # TODO Test if that's actually the reference beat, not per-qrs measurements
             reference_beat_measurements=beat_measurements,
+            individual_beat_measurements=individual_beat_measurements,
+            reference_beat_type_by_individual_beat=reference_beat_type_by_individual_beat,
+            pacemaker_spike_infos=pacemaker_spike_infos,
             average_rr_interval_ms=real_measurement(average_rr_interval_ms),
             average_pp_interval_ms=real_measurement(average_pp_interval_ms),
+            ventricular_rate_bpm=real_measurement(ventricular_rate_bpm),
+            atrial_rate_bpm=real_measurement(atrial_rate_bpm),
+            qtc_ms=real_measurement(qtc_ms),
+            formula_type_used_for_heart_rate_correction=formula_type_used_for_heart_rate_correction,
         )
 
 
