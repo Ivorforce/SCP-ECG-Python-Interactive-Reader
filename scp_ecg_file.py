@@ -792,25 +792,33 @@ class Section7:
         ventricular_rate_bpm = r.read("H")
         atrial_rate_bpm = r.read("H")
         qtc_ms = r.read("H")
-        formula_type_used_for_heart_rate_correction_int = r.read("B")
-        number_of_bytes_in_tagged_fields = r.read("H")
 
-        if formula_type_used_for_heart_rate_correction_int == 47 and number_of_bytes_in_tagged_fields == 12149:
-            # Specific manufacturer who misread the specs and used 2-byte 29999 for both "formula type" and "number_of_bytes_in_tagged_fields"
-            # We now need to consume one additional byte and assume both are 'unspecified'
-            r.read_bytes(1)
-            formula_type_used_for_heart_rate_correction = InterpretedSection7.HRCorrectionFormulaType.UNKNOWN_OR_UNSPECIFIED
+        if header.length_bytes - r.buffer.tell() == 4:
+            # Specific manufacturer who misread the specs and used 2 bytes for both "formula type" and "number_of_bytes_in_tagged_fields"
+            # Detecting this with length remaining = 4 should be safe because they don't write any additional data, and if any tag was added,
+            # it would be at least 5 additional bytes
+            formula_type_used_for_heart_rate_correction_val = real_measurement(r.read("H"))
+            if formula_type_used_for_heart_rate_correction_val is not None:
+                try:
+                    formula_type_used_for_heart_rate_correction = InterpretedSection7.HRCorrectionFormulaType(formula_type_used_for_heart_rate_correction_val)
+                except ValueError:
+                    formula_type_used_for_heart_rate_correction = InterpretedSection7.HRCorrectionFormulaType.OTHER
+            else:
+                formula_type_used_for_heart_rate_correction = InterpretedSection7.HRCorrectionFormulaType.UNKNOWN_OR_UNSPECIFIED
+            # TODO We don't read additional global measurements yet anyway
         else:
             try:
-                formula_type_used_for_heart_rate_correction = InterpretedSection7.HRCorrectionFormulaType(formula_type_used_for_heart_rate_correction_int)
+                formula_type_used_for_heart_rate_correction = InterpretedSection7.HRCorrectionFormulaType(r.read("B"))
             except ValueError:
                 formula_type_used_for_heart_rate_correction = InterpretedSection7.HRCorrectionFormulaType.OTHER
+
+            number_of_bytes_in_tagged_fields = r.read("H")
             if number_of_bytes_in_tagged_fields > 0:
                 print(f"Ignoring unsupported tagged global measurements ({number_of_bytes_in_tagged_fields})")
 
             if header.length_bytes > r.buffer.tell():
+                print(r.read_bytes(header.length_bytes - r.buffer.tell()))
                 print(f"Warn: Section 7 contains additional data that was ignored (unsupported, {r.buffer.tell()} / {header.length_bytes} read).")
-                print([b for b in r.read_bytes(header.length_bytes - r.buffer.tell())])
 
         return InterpretedSection7(
             reference_beat_measurements=beat_measurements,
