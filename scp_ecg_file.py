@@ -1067,14 +1067,14 @@ class SCPFile:
             columns=[l.get_name() for l in section3.leads],
         )
 
-    def write_wfdb_file(self, path):
+    def write_wfdb_file(self, path, print_warnings: bool = True):
         import wfdb
         path = pathlib.Path(path)
 
         tables = self.huffman_tables()
         section3 = self.section3().read_and_interpret()
         container = self.section6().read(tables, section3)
-        data_mv = SCPFile.get_data_from_sections(section3, container)
+        data_mv = SCPFile.get_data_from_sections(section3, container, print_warnings=print_warnings)
 
         wfdb.wrsamp(
             record_name=path.stem,
