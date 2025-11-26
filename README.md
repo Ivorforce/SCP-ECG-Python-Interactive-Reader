@@ -40,7 +40,7 @@ The support in this implementation is need-directed, and thus a lot of features 
 
 - SCPFile / Section 0: Used for navigating the file.
 - Section 1: Contains record description tags.
-- Section 2: May contain huffman tables to read the file. This is not fully supported yet (some files are not encoded with huffman tables).
+- Section 2: May contain huffman tables to read the file. Reading huffman tables (except the 'default' one) is not supported yet.
 - Section 3: Contains lead information.
 - Section 4: Contains QRS locations, reference beat subtraction zones, and protected areas (partially supported).
 - ~~Section 5: Reference beat data (not supported)~~
