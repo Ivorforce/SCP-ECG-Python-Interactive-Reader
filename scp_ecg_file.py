@@ -742,17 +742,21 @@ class Section7:
         def real_measurement(measurement: int):
             return measurement if measurement not in (29999, 29998, 19999) else None
 
+        def real_measurement_deg(measurement: int):
+            # Technically just 999 is a wrong measurement, but I don't trust manufacturers to not recognize this
+            return real_measurement(measurement) if measurement not in (999,) else None
+
         beat_measurements = []
         for i in range(number_of_beat_measurements):
             beat_measurements.append(BeatMeasurements(
-                p_onset_ms=real_measurement(r.read("H")),
-                p_offset_ms=real_measurement(r.read("H")),
-                qrs_onset_ms=real_measurement(r.read("H")),
-                qrs_offset_ms=real_measurement(r.read("H")),
-                t_offset_ms=real_measurement(r.read("H")),
-                p_axis_in_frontal_plane_deg=real_measurement(r.read("H")),
-                qrs_axis_in_frontal_plane_deg=real_measurement(r.read("H")),
-                t_axis_in_frontal_plane_deg=real_measurement(r.read("H")),
+                p_onset_ms=real_measurement(r.read("h")),
+                p_offset_ms=real_measurement(r.read("h")),
+                qrs_onset_ms=real_measurement(r.read("h")),
+                qrs_offset_ms=real_measurement(r.read("h")),
+                t_offset_ms=real_measurement(r.read("h")),
+                p_axis_in_frontal_plane_deg=real_measurement_deg(r.read("h")),
+                qrs_axis_in_frontal_plane_deg=real_measurement_deg(r.read("h")),
+                t_axis_in_frontal_plane_deg=real_measurement_deg(r.read("h")),
             ))
 
         pacemaker_spike_infos = [
