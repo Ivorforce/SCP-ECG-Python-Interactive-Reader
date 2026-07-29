@@ -219,8 +219,12 @@ class InterpretedSection1:
                 self.weight_kg = weight_num
             elif weight_unit == 2:
                 self.weight_kg = weight_num / 1000
+            elif weight_unit == 3:
+                self.weight_kg = weight_num * 0.45359237
+            elif weight_unit == 4:
+                self.weight_kg = weight_num * 0.028349523125
             else:
-                print("Unexpected weight unit:", weight_num)
+                print("Unexpected weight unit:", weight_unit)
         elif id == 8:
             try:
                 self.sex = InterpretedSection1.Sex(r.read("B"))
@@ -411,6 +415,9 @@ class Section2:
         number_of_tables = r.read("H")
         if number_of_tables == 19999:
             return [HuffmanTable.default()]
+        if number_of_tables == 0:
+            # No tables defined; the data sections hold raw signed 16-bit samples.
+            return []
 
         raise ValueError("Custom huffman tables are not supported yet")
 
@@ -441,8 +448,8 @@ lead_id_to_name: dict[int, str] = {
     23: "Left Leg",
     24: "I",  # Not specified what the difference is to 1...
     25: "E",
-    26: "A",
-    27: "C",
+    26: "C",
+    27: "A",
     28: "M",
     29: "F",
     30: "H",
@@ -471,8 +478,8 @@ lead_id_to_name: dict[int, str] = {
     53: "Left Leg-cal",
     54: "I-cal",
     55: "E-cal",
-    56: "A-cal",
-    57: "C-cal",
+    56: "C-cal",
+    57: "A-cal",
     58: "M-cal",
     59: "F-cal",
     60: "H-cal",
@@ -667,6 +674,16 @@ class Section6:
         )
 
 
+def real_measurement(measurement: int):
+    """Map the CSE reserved codes (not computed / lead rejected / wave absent) onto None."""
+    return measurement if measurement not in (29999, 29998, 19999) else None
+
+
+def real_measurement_deg(measurement: int):
+    # Technically just 999 is a wrong measurement, but I don't trust manufacturers to not recognize this
+    return real_measurement(measurement) if measurement not in (999,) else None
+
+
 @dataclasses.dataclass
 class BeatMeasurements:
     p_onset_ms: int
@@ -739,13 +756,6 @@ class Section7:
         average_rr_interval_ms = r.read("H")
         average_pp_interval_ms = r.read("H")
 
-        def real_measurement(measurement: int):
-            return measurement if measurement not in (29999, 29998, 19999) else None
-
-        def real_measurement_deg(measurement: int):
-            # Technically just 999 is a wrong measurement, but I don't trust manufacturers to not recognize this
-            return real_measurement(measurement) if measurement not in (999,) else None
-
         beat_measurements = []
         for i in range(number_of_beat_measurements):
             beat_measurements.append(BeatMeasurements(
@@ -775,7 +785,7 @@ class Section7:
             try:
                 pacemaker_spike_infos[i].spike_source = InterpretedSection7.PacemakerSpikeInfo.SpikeSource(r.read("B"))
             except ValueError:
-                pacemaker_spike_infos[i].spike_type = InterpretedSection7.PacemakerSpikeInfo.SpikeSource.OTHER
+                pacemaker_spike_infos[i].spike_source = InterpretedSection7.PacemakerSpikeInfo.SpikeSource.OTHER
 
             triggered_qrs_idx = r.read("H")
             pacemaker_spike_infos[i].index_of_triggered_qrs = (triggered_qrs_idx - 1) if triggered_qrs_idx > 0 else None
@@ -859,20 +869,31 @@ class Section8:
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
 
+        confirmation_status = SCPFreeStatements.ConfirmationStatus(r.read("B"))
+        date_and_time = datetime(
+            year=r.read("H"),
+            month=r.read("B"),
+            day=r.read("B"),
+            hour=r.read("B"),
+            minute=r.read("B"),
+            second=r.read("B")
+        )
+
+        statements = []
+        for _ in range(r.read("B")):
+            r.read("B")  # Statement sequence number, starting at 1. Redundant with the list order.
+            length_bytes = r.read("H")
+            body = r.read_bytes(length_bytes)
+            if len(body) < length_bytes:
+                raise ValueError(
+                    f"Statement claims {length_bytes} bytes but only {len(body)} remain in section 8."
+                )
+            statements.append(SCPFile.to_text(body))
+
         return SCPFreeStatements(
-            confirmation_status=SCPFreeStatements.ConfirmationStatus(r.read("B")),
-            date_and_time=datetime(
-                year=r.read("H"),
-                month=r.read("B"),
-                day=r.read("B"),
-                hour=r.read("B"),
-                minute=r.read("B"),
-                second=r.read("B")
-            ),
-            statements=[
-                SCPFile.to_text(r.read_bytes(r.read("H")))
-                for i in range(r.read("B"))
-            ]
+            confirmation_status=confirmation_status,
+            date_and_time=date_and_time,
+            statements=statements,
         )
 
 
@@ -908,6 +929,7 @@ class Section10Measurements:
     quality_code_reflecting_ecg_recording_conditions_id: int = None
     st_amplitude_uv_at_j_point_plus_20_ms: int = None
     st_amplitude_uv_at_j_point_plus_60_ms: int = None
+    st_amplitude_uv_at_j_point_plus_80_ms: int = None
     st_amplitude_uv_at_j_point_plus_1_16th_average_rr_inverval_ms: int = None
     st_amplitude_uv_at_j_point_plus_1_8th_average_rr_inverval_ms: int = None
 
@@ -916,27 +938,35 @@ class Section10Measurements:
 class Section10:
     io: IOBase
 
-    def read(self):
+    def read(self) -> dict[int, Section10Measurements]:
         self.io.seek(0)
         r = InteractiveReader(self.io, "<")
         header = SectionHeader.read(r)
 
+        number_of_leads = r.read("H")
+        r.read("H")  # Manufacturer specific.
+
+        # lead_id and length_of_record are read per block rather than taken from the payload.
+        measurement_names = [f.name for f in dataclasses.fields(Section10Measurements)][2:]
+
         result: dict[int, Section10Measurements] = dict()
-        while header.length_bytes > r.buffer.tell():
-            id = r.read("H")
-            length_bytes = r.read("H")
-            section = r.read_bytes(length_bytes)
-            measurement_reader = InteractiveReader(BytesIO(section), "<")
-            measurements = []
-            try:
-                # Max 50 measurements, according to spec.
-                # Anything afterwards is manufacturer specific and may not use the 2-byte schema
-                for _ in range(50):
-                    measurements.append(measurement_reader.read("H"))
-            except:
-                pass  # No more bytes, just stop
-            result[id] = Section10Measurements(
-                *measurements[:len(dataclasses.fields(Section10Measurements))]
+        for _ in range(number_of_leads):
+            if header.length_bytes <= r.buffer.tell():
+                break
+
+            lead_id = r.read("H")
+            length_bytes = r.read("H")  # Excludes these first 4 bytes.
+            block = r.read_bytes(length_bytes)
+
+            # Max 50 measurements (100 bytes), according to spec.
+            # Anything afterwards is manufacturer specific and may not use the 2-byte schema.
+            mandatory = block[:100]
+            values = InteractiveReader(BytesIO(mandatory), "<").read_iter("h", count=len(mandatory) // 2)
+
+            result[lead_id] = Section10Measurements(
+                lead_id=lead_id,
+                length_of_record=length_bytes,
+                **{name: real_measurement(value) for name, value in zip(measurement_names, values)},
             )
 
         return result
@@ -958,6 +988,8 @@ class SCPFile:
     def read(f: IOBase) -> "SCPFile":
         r = InteractiveReader(f, byte_order="<")
 
+        # TODO Neither this CRC nor the per-section CRCs in SectionHeader are checked, so corrupt
+        #  files are read as far as their structure allows instead of being rejected. See README.
         crc = r.read("H")
         length_bytes = r.read("I")
 
@@ -1033,11 +1065,14 @@ class SCPFile:
     def get_data_from_sections(section3: InterpretedSection3, container: DataContainer, *, print_warnings: bool = True) -> np.ndarray:
         assert section3.leads_all_simultaneously_recorded, "Leads not simultaneously recorded."
 
-        data_len = section3.leads[0].ending_sample_idx - section3.leads[0].starting_sample_idx
-        assert all(lead.ending_sample_idx - lead.starting_sample_idx == data_len for lead in section3.leads), f"Leads of different lengths: {[lead.ending_sample_idx - lead.starting_sample_idx for lead in section3.leads]}"
+        # Start and end sample numbers are inclusive, so the declared length includes both ends.
+        data_len = section3.leads[0].ending_sample_idx - section3.leads[0].starting_sample_idx + 1
+        assert all(lead.ending_sample_idx - lead.starting_sample_idx + 1 == data_len for lead in section3.leads), f"Leads of different lengths: {[lead.ending_sample_idx - lead.starting_sample_idx + 1 for lead in section3.leads]}"
 
         len_per_lead_real = [lead_data.shape[0] - lead_info.starting_sample_idx for lead_data, lead_info in zip(container.data_mv, section3.leads)]
-        data_len_real = min(len_per_lead_real)
+        # Decoded data can overrun the declared range: huffman streams are padded to a byte
+        # boundary, and the padding bits decode to extra samples. Section 3 is authoritative.
+        data_len_real = min(min(len_per_lead_real), data_len)
         if data_len_real < data_len:
             assert data_len - data_len_real < 1000, f"Some leads' actual data was substantially shorter than expected. Expected: {data_len}, actual: {len_per_lead_real}"
             if print_warnings:

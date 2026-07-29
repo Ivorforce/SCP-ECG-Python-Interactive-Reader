@@ -52,6 +52,15 @@ The support in this implementation is need-directed, and thus a lot of features 
 - Section 10: Contains global ECG metadata.
 - ~~Section 11: Universal ECG intepretative statements (not supported)~~
 
+## Limitations
+
+**Checksums are not verified.** Both the 2-byte record CRC and the per-section CRCs are parsed and
+then ignored, so a truncated or corrupted file is read as far as its structure allows rather than
+being rejected. Callers that care about integrity — batch conversions of clinical archives in
+particular — need their own plausibility checks on the decoded signal. Adding this means running a
+CRC-CCITT over the record (every byte after the CRC field) and over each section (every byte after
+that section's own CRC field), per spec 5.2.4 and 5.2.7.
+
 ## Command line interface
 
 The script also supports a basic command line interface (although the primary interface is the python interface).
